@@ -1,0 +1,66 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build ${{github.workspace}}/build --config Release --parallel
+
+      - name: Package artefacts
+        shell: bash
+        run: |
+          mkdir -p package
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            cp -R "build/NovemberResonance_artefacts/Release/VST3/November Resonance.vst3" package/ || true
+            cp -R "build/NovemberResonance_artefacts/Release/Standalone/November Resonance.app" package/ || true
+            cd package && zip -r ../NovemberResonance-macOS.zip . && cd ..
+          else
+            cp -R "build/NovemberResonance_artefacts/Release/VST3/November Resonance.vst3" package/ || true
+            cp -R "build/NovemberResonance_artefacts/Release/Standalone/November Resonance.exe" package/ || true
+            cd package && zip -r ../NovemberResonance-Windows.zip . && cd ..
+          fi
+
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NovemberResonance-${{ matrix.os }}
+          path: NovemberResonance-*.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download all artefacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artefacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0-${{ github.run_number }}
+          name: November Resonance v1.0.0 (build ${{ github.run_number }})
+          body: Daily VST instrument build for November Resonance.
+          files: artefacts/**/*.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
