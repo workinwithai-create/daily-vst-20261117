@@ -16,6 +16,7 @@ public:
     void renderNextBlock(juce::AudioBuffer<float>& outputBuffer, int startSample, int numSamples) override;
 
     void setProcessor(NovemberResonanceAudioProcessor* p) { processor = p; }
+    void prepare(const juce::dsp::ProcessSpec& spec);
 
 private:
     NovemberResonanceAudioProcessor* processor = nullptr;

@@ -7,6 +7,15 @@ ResonanceVoice::ResonanceVoice()
     filter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
 }
 
+void ResonanceVoice::prepare(const juce::dsp::ProcessSpec& spec)
+{
+    osc.prepare(spec);
+    filter.prepare(spec);
+    adsr.setSampleRate(spec.sampleRate);
+    cutoffSmoothed.reset(spec.sampleRate, 0.05);
+    resonanceSmoothed.reset(spec.sampleRate, 0.05);
+}
+
 void ResonanceVoice::startNote(int midiNoteNumber, float velocity, juce::SynthesiserSound*, int)
 {
     currentMidiNote = midiNoteNumber;
@@ -65,7 +74,7 @@ void ResonanceVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer, int
         filter.setCutoffFrequency(juce::jlimit(20.0f, 20000.0f, cutoff));
         filter.setResonance(juce::jlimit(0.1f, 10.0f, res));
 
-        float sample = osc.processSample(0.0f) * env * currentVelocity * 0.3f;
+        float sample = osc.processSample(0.0f) * env * currentVelocity * 0.25f;
         sample = filter.processSample(0, sample);
 
         for (int ch = 0; ch < outputBuffer.getNumChannels(); ++ch)
@@ -112,17 +121,15 @@ void NovemberResonanceAudioProcessor::prepareToPlay(double sampleRate, int sampl
     juce::dsp::ProcessSpec spec;
     spec.sampleRate = sampleRate;
     spec.maximumBlockSize = static_cast<juce::uint32>(samplesPerBlock);
-    spec.numChannels = 2;
+    spec.numChannels = 1; // mono per voice processing
 
-    limiter.prepare(spec);
-    limiter.setThreshold(-0.5f);
-    limiter.setRelease(50.0f);
+    limiter.prepare({sampleRate, static_cast<juce::uint32>(samplesPerBlock), 2});
+    limiter.setThreshold(-1.0f);
+    limiter.setRelease(100.0f);
 
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = dynamic_cast<ResonanceVoice*>(synth.getVoice(i)))
-            voice->setProcessor(this); // ensure
-
-    // Prepare oscillators/filters in voices if needed (they auto-prepare on first use mostly)
+            voice->prepare(spec);
 }
 
 void NovemberResonanceAudioProcessor::releaseResources() {}
